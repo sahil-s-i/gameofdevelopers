@@ -1,4 +1,4 @@
-
+//this middleware is used to check if the user role is valid for the end point or not if the user is loggeed in
 function allowRoles(roles) {
     return (req,res,next)=>{
         const userRole = req.user?.role;

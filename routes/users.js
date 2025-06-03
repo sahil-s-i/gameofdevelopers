@@ -1,5 +1,5 @@
 var express = require('express');
-const {User,RefreshToken} = require('../models');
+const {User,RefreshToken,formatUser} = require('../models');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { token } = require('morgan');
@@ -10,20 +10,14 @@ require('dotenv').config();
 
 
 /* GET users listing. */
-router.get('/', function(req, res, next) {
-  res.send('respond with a resource');
-});
 
-router.post('/',(req,res)=>{
-  console.log(req);
-  res.send(req.body);
-});
-
-
-
+//simple hello responce
 router.get('/hello',(req,res)=>{
   res.send("hello user");
 })
+
+
+//regestring user with this end
 router.post('/regester', async (req, res) => {
   try {
     const bodyReq = req.body;
@@ -35,8 +29,10 @@ router.post('/regester', async (req, res) => {
   }
 });
 
+
+
 // Get all users
-router.get('/get-all', async (req, res) => {
+router.get('/get-all',authenticateToken,allowRoles(['admin']), async (req, res) => {
   try {
     const users = await User.findAll();
     res.json(users);
@@ -47,11 +43,23 @@ router.get('/get-all', async (req, res) => {
 });
 
 
+//Get urrent user information
+router.get('/info',authenticateToken,async (req,res)=>{
+  const userId = req.user?.id;
+  console
+  .log(req.user);
+  console.log(userId);
+  const userInfo = await User.findByPk(userId);
+  console.log(userInfo);
+  res.status(200).json({message:"i am accessed",data:formatUser(userInfo)});
+});
 
 
+
+
+//login end point either we can login with email or username
 router.post('/login',async(req,res)=>{
   const {identifier, password} = req?.body;
-  console.log(identifier);
   const isEmail = identifier.includes('@');
   const whereClause = isEmail? {email: identifier}:{username:identifier};
 
@@ -62,6 +70,7 @@ router.post('/login',async(req,res)=>{
   const validPassword = await bcrypt.compare(password,user.password);
   if(!validPassword) return res.status(401).json({error:'Invalid password'});
 
+  //creating accessToken with help of jwt 
   const accessToken = jwt.sign(
     {
       id:user.id,
@@ -72,6 +81,7 @@ router.post('/login',async(req,res)=>{
     {expiresIn:process.env.ACCESS_TOKEN_EXPIRES_IN}
   );
 
+  //creating refreshToken with the help of jwt
   const refreshtoken = jwt.sign(
     {
       id:user.id,
@@ -82,12 +92,15 @@ router.post('/login',async(req,res)=>{
     {expiresIn:process.env.REFRESH_TOKEN_EXPIRES_IN}
   );
 
+  //adding Refreshtoken to db
   await RefreshToken.create({
     token: refreshtoken,
     userId: user.id,
     expiresAt: new Date(Date.now()+7*24*60*60*1000),
   })
 
+  
+  //automatically setting refresh token in the user cookie
   res.cookie('refreshtoken',refreshtoken,{
     httpOnly:true,
     secure:false,
@@ -96,14 +109,17 @@ router.post('/login',async(req,res)=>{
   });
 
 
+  //sending accessToken to the user in response as json data
   res.json({accessToken});
 
 });
 
 
-router.post('/token',async (req,res)=>{
+//this end-point helps user to get new access token if current one gets expired just need to hit this end-point nothing to worry about
+router.get('/token',async (req,res)=>{
   const refreshtoken = req.cookies.refreshtoken;
 
+  //if there is no refresh-token it will send responce with 401 status code
   if(!refreshtoken ) return res.status(401).json({error:'Refresh token missing'});
 
   try{

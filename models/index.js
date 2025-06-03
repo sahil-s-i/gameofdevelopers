@@ -72,10 +72,18 @@ const RefreshToken = sequelize.define('ReffreshToken',{
     },
 });
 
-
+function formatUser(user){
+  return {
+    id: user.id,
+    name:user.name,
+    username:user.username,
+    email:user.email,
+    role:user.role,
+  }
+}
 
 
 // Sync models with the database
 sequelize.sync();
 
-module.exports = { sequelize, User , RefreshToken};
+module.exports = { sequelize, User , RefreshToken, formatUser};

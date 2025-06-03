@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const { json } = require('sequelize');
 require('dotenv').config();
 
-
+//it is middleware which is used to check whether the user is logged in and have valid access token
 function authenticateToken(req,res,next){
     const authHeader = req.headers['authorization'];
     const token =authHeader?.split(' ')[1];
