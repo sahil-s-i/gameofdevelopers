@@ -75,6 +75,17 @@ router.get('/login',async (req,res)=>{
 router.post('/login',validateCaptcha,async(req,res)=>{
   const {identifier, password} = req?.body;
   const isEmail = identifier.includes('@');
+  if(isEmail){
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if(!emailRegex.test(identifier)){
+      return res.status(400).json({message:"Invalid Email"});
+    }
+  }else{
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if(!usernameRegex.test(identifier) || identifier.length<3 || identifier.length>15){
+      return res.status(400).json({message:"Invalid Username"});
+    }
+  }
   const whereClause = isEmail? {email: identifier}:{username:identifier};
 
   const user = await User.findOne({where:whereClause});

@@ -3,6 +3,9 @@ require('dotenv').config();
 function validateCaptcha(req,res,next){
 
     const userCaptch = req.body.captch;
+    if(userCaptch.length != 4){
+        return res.status(400).json({message:"Invalid Captch length"});
+    }
     const jwtCaptch = req.cookies.captcha_token;
 
     if(!userCaptch) return res.status(404).json({message:"captch is missing"});
