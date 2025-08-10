@@ -2,14 +2,16 @@ var express = require('express');
 const {User,RefreshToken,formatUser} = require('../models');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
-const { token } = require('morgan');
+const svgCaptcha = require('svg-captcha')
+
 const authenticateToken = require('../middleware/authMiddleware');
 const allowRoles = require('../middleware/roleMiddleware');
+const validateCaptcha = require('../middleware/validateCaptchMiddleware');
+
 var router = express.Router();
 require('dotenv').config();
 
 
-/* GET users listing. */
 
 //simple hello responce
 router.get('/hello',(req,res)=>{
@@ -17,7 +19,7 @@ router.get('/hello',(req,res)=>{
 })
 
 
-//regestring user with this end
+//regestring user with this end-point
 router.post('/regester', async (req, res) => {
   try {
     const bodyReq = req.body;
@@ -46,21 +48,44 @@ router.get('/get-all',authenticateToken,allowRoles(['admin']), async (req, res) 
 //Get urrent user information
 router.get('/info',authenticateToken,async (req,res)=>{
   const userId = req.user?.id;
-  console
-  .log(req.user);
-  console.log(userId);
   const userInfo = await User.findByPk(userId);
-  console.log(userInfo);
   res.status(200).json({message:"i am accessed",data:formatUser(userInfo)});
 });
 
+router.get('/login',async (req,res)=>{
+  const text = svgCaptcha.create();
+  const captchaJWT = jwt.sign(
+    {
+      captcha:text.text
+    },
+    process.env.JWT_SECRET_ACCESS,
+    {expiresIn: "3m"}
+  );
 
+  res.cookie('captcha_token',captchaJWT,{
+    httpOnly:true,
+    sameSite:'strict',
+    maxAge:3*60*100
+  });
+  res.type('svg').status(200).send(text.data);
+});
 
 
 //login end point either we can login with email or username
-router.post('/login',async(req,res)=>{
+router.post('/login',validateCaptcha,async(req,res)=>{
   const {identifier, password} = req?.body;
   const isEmail = identifier.includes('@');
+  if(isEmail){
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if(!emailRegex.test(identifier)){
+      return res.status(400).json({message:"Invalid Email"});
+    }
+  }else{
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if(!usernameRegex.test(identifier) || identifier.length<3 || identifier.length>15){
+      return res.status(400).json({message:"Invalid Username"});
+    }
+  }
   const whereClause = isEmail? {email: identifier}:{username:identifier};
 
   const user = await User.findOne({where:whereClause});
@@ -122,9 +147,12 @@ router.get('/token',async (req,res)=>{
   //if there is no refresh-token it will send responce with 401 status code
   if(!refreshtoken ) return res.status(401).json({error:'Refresh token missing'});
 
+
+  //try to decode the response token if it is valid or not if valid it will create a access token and send it back to the front end
   try{
     const decoded = jwt.verify(refreshtoken,process.env.JWT_SECRET_REFRESH);
 
+    //creating a new response token 
     const accessToken = jwt.sign(
       {
       id:decoded.id,
@@ -135,13 +163,16 @@ router.get('/token',async (req,res)=>{
     {expiresIn:process.env.ACCESS_TOKEN_EXPIRES_IN}
     );
 
+    //sending back response token
     res.json({accessToken});
   }catch(err){
+    //if refresh token is invalid it will send back a response with 403 status code
     res.status(403).json({error:'Invalid refresh token'});
   }
 })
 
 
+//logout end-point will remove refreshToken from the db and also from the user cookie
 router.get('/logout',async (req,res)=>{
   const token = req.cookies.refreshtoken;
   if(token){
@@ -151,6 +182,8 @@ router.get('/logout',async (req,res)=>{
   res.json({message:'Logged out successfully'});
 });
 
+
+//just a sample end point which will is only accessable from the uthenticated user 
 router.get('/me',authenticateToken,allowRoles(['user']),(req,res)=>{
   console.log("I am accessed");
   res.json({message:'hello hacker'});
