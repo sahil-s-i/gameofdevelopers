@@ -7,6 +7,7 @@ const svgCaptcha = require('svg-captcha')
 const authenticateToken = require('../middleware/authMiddleware');
 const allowRoles = require('../middleware/roleMiddleware');
 const validateCaptcha = require('../middleware/validateCaptchMiddleware');
+const { send } = require('express/lib/response');
 
 var router = express.Router();
 require('dotenv').config();
@@ -72,7 +73,7 @@ router.get('/login',async (req,res)=>{
 
 
 //login end point either we can login with email or username
-router.post('/login',validateCaptcha,async(req,res)=>{
+router.post('/login',async(req,res)=>{
   const {identifier, password} = req?.body;
   const isEmail = identifier.includes('@');
   if(isEmail){
@@ -128,14 +129,12 @@ router.post('/login',validateCaptcha,async(req,res)=>{
   //automatically setting refresh token in the user cookie
   res.cookie('refreshtoken',refreshtoken,{
     httpOnly:true,
-    secure:false,
-    sameSite:'strict',
-    maxAge:7*24*60*60*1000,
+    secure:true
   });
 
 
   //sending accessToken to the user in response as json data
-  res.json({accessToken});
+  return res.json({accessToken,refreshtoken});
 
 });
 
